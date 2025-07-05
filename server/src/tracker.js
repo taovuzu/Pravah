@@ -1,5 +1,8 @@
 import dgram from 'dgram';
 import { Buffer } from 'buffer';
+import crypto from 'crypto';
+
+// Reference :- https://www.bittorrent.org/beps/bep_0015.html
 
 export const getPeers = (torrent, callback) => {
   const socket = dgram.createSocket('udp4');
@@ -33,11 +36,23 @@ function respType(resp) {
 }
 
 function buildConnReq() {
-  // ...
+  const buf = Buffer.allocUnsafe(16);
+  // protocol id 
+  buf.writeBigUInt64BE(0x41727101980, 0);  // magic constant
+  // action
+  buf.writeInt32BE(0, 8);
+  // transaction id
+  crypto.randomBytes(4).copy(buf, 12);
+
+  return buf;
 }
 
 function parseConnResp(resp) {
-  // ...
+  return {
+    action : resp.readUInt32BE(0),
+    transactionId : resp.readUInt32BE(4),
+    connectionId : resp.readBigUInt64BE(8)
+  }
 }
 
 function buildAnnounceReq(connId) {
