@@ -3,10 +3,9 @@ import bencode from 'bencode';
 import dgram from 'dgram';
 import { Buffer } from 'buffer';
 import * as tracker from './tracker.js';
+import * as torrentParser from './torrentParser.js'
 
-
-const buffer = await fs.readFile("./public/testing.torrent");
-const torrent = bencode.decode(buffer, 'utf8');
+const torrent = torrentParser.open("./public/testing.torrent");
 
 tracker.getPeers(torrent, peers => {
   console.log('list of peers is :', peers);
