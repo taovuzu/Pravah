@@ -9,7 +9,7 @@ import crypto from 'crypto';
 
 export const getPeers = (torrent, callback) => {
   const socket = dgram.createSocket('udp4');
-  const url = torrent["announce-list"] ? torrent["announce-list"][0] : torrent["announce"];
+  const url = torrent["announce-list"] ? torrent["announce-list"][2] : torrent["announce"];
 
   // 1. Send connection request
   udpSend(socket, buildConnReq(), url);
@@ -20,6 +20,7 @@ export const getPeers = (torrent, callback) => {
       const connResp = parseConnResp(msg, rinfo);
       // 3. send announce request
       const announceReq = buildAnnounceReq(connResp.connectionId, torrent);
+      udpSend(socket, announceReq, url);
     } else if (respType(msg) === 'announce') {
       // 4. parse announce response
       const announceResp = parseAnnounceResp(msg, rinfo);
@@ -27,11 +28,15 @@ export const getPeers = (torrent, callback) => {
       callback(announceResp.peers);
     }
   });
+
+  socket.on('error', (err) => {
+    console.log("Socket Error", err);
+  });
 }
 
 function udpSend(socket, message, rawUrl, callback = () => { }) {
-  const url = URL(rawUrl);
-  socket.send(message, 0, message.length, url.port, url.host, callback);
+  const url = new URL(rawUrl);
+  socket.send(message, 0, message.length, url.port ? parseInt(url.port) : 1337, url.hostname, callback);
 }
 
 function respType(resp) {
@@ -51,7 +56,7 @@ function respType(resp) {
 function buildConnReq() {
   const buf = Buffer.allocUnsafe(16);
   // protocol id 
-  buf.writeBigUInt64BE(0x41727101980, 0);  // magic constant
+  buf.writeBigUInt64BE(4497486125440n, 0);  // magic constant
   // action
   buf.writeInt32BE(0, 8);
   // transaction id
@@ -120,7 +125,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
   // key
   crypto.randomBytes(4).copy(buf, 88);
   // num_want
-  buf.writeInt32BE(-1, 92);
+  buf.writeInt32BE(50, 92);
   // port
   buf.writeUInt16BE(port, 96);
 
@@ -142,7 +147,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
 function parseAnnounceResp(resp) {
   let group = (iterable, groupSize) => {
     let groups = [];
-    for (let i = 0; i < iterable.size(); i += groupSize) {
+    for (let i = 0; i < iterable.length; i += groupSize) {
       groups.push(iterable.subarray(i, i + groupSize));
     }
     return groups;
@@ -155,7 +160,7 @@ function parseAnnounceResp(resp) {
     seeders: resp.readUInt32BE(12),
     peers: group(resp.subarray(20), 6).map(address => {
       return {
-        ip: address.subarray(0, 4).join('.'),
+        ip: Array.from(address.subarray(0, 4)).join('.'),
         port: address.readUInt16BE(4)
       }
     })
